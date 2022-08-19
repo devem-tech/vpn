@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+cn=$(basename $(pwd))
+args="-v $(pwd)/volumes/etc/openvpn:/etc/openvpn --cap-add=NET_ADMIN kylemanna/openvpn"
+
+if [ $# -gt 0 ]; then
+
+  if [ "$1" == "init" ]; then
+    shift 1
+    mkdir -p clients
+    docker run --rm -it $args ovpn_genconfig -u udp://$@
+    docker run --rm -it $args ovpn_initpki
+
+  elif [ "$1" == "start" ]; then
+    docker run -d --restart always --name $cn -p 1194:1194/udp $args
+
+  elif [ "$1" == "stop" ]; then
+    docker stop $cn | xargs docker rm
+
+  elif [ "$1" == "add" ]; then
+    shift 1
+    docker run --rm -it $args easyrsa build-client-full $@ nopass
+    docker run --rm -it $args ovpn_getclient $@ > clients/$@.ovpn
+
+  elif [ "$1" == "remove" ]; then
+    shift 1
+    docker run --rm -it $args ovpn_revokeclient $@ remove && rm clients/$@.ovpn
+  fi
+
+else
+  docker ps --filter "name=$cn"
+fi
